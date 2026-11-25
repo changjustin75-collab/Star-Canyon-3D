@@ -1,0 +1,6 @@
+{
+  "name": "星際峽谷戰機 Star Canyon 3D",
+  "description": "駕駛超音速戰機貼地飛越霓虹峽谷與隕石陣，支援 Rabboni 六軸體感雙軸傾角翻滾爬升與桶滾無敵閃避。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
