@@ -306,8 +306,12 @@ export class MotionControl {
     const error = norm(residual);
     this.linearAcceleration = error;
 
+    // 靜止時（角速度很低）即使殘差偏大也信任加速度計，避免快速揮動後姿態估計卡死
+    const atRest = this.maxRotationRate < 13;
     const alpha =
-      Math.abs(length - this.gravityScale) < 0.16 && error < 0.29 ? 1 - Math.exp(-dt * 3.6) : 0;
+      Math.abs(length - this.gravityScale) < 0.16 && (error < 0.29 || atRest)
+        ? 1 - Math.exp(-dt * (atRest && error >= 0.29 ? 9 : 3.6))
+        : 0;
     this.gravity = alpha
       ? normalized(prediction.map((v, i) => v + (acc[i] / length - v) * alpha))
       : prediction;
