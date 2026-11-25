@@ -14,11 +14,14 @@ import {
   Crosshair,
 } from 'lucide-react';
 import type { CameraView, HudSnapshot } from '../game/CanyonEngine';
-import type { RabboniState } from '../lib/rabboni-connector';
+import type { RabboniConfig, RabboniState } from '../lib/rabboni-connector';
+import { MotionCompass, type GestureFeedback } from './MotionCompass';
 
 interface HudOverlayProps {
   hud: HudSnapshot;
   sensorState: RabboniState;
+  sensorConfig: RabboniConfig;
+  activeGesture: GestureFeedback | null;
   muted: boolean;
   cameraView: CameraView;
   autoFire: boolean;
@@ -33,11 +36,14 @@ interface HudOverlayProps {
   onOpenAbout: () => void;
   onCalibrate: () => void;
   onBarrelRoll: () => void;
+  onUpdateConfig: (partial: Partial<RabboniConfig>) => void;
 }
 
 export const HudOverlay: React.FC<HudOverlayProps> = ({
   hud,
   sensorState,
+  sensorConfig,
+  activeGesture,
   muted,
   cameraView,
   autoFire,
@@ -52,7 +58,9 @@ export const HudOverlay: React.FC<HudOverlayProps> = ({
   onOpenAbout,
   onCalibrate,
   onBarrelRoll,
+  onUpdateConfig,
 }) => {
+  const sensorConnected = sensorState.source !== 'manual' && (sensorState.connected || sensorState.fresh);
   const sourceLabel =
     sensorState.source === 'desktop'
       ? '電腦橋接'
@@ -200,9 +208,21 @@ export const HudOverlay: React.FC<HudOverlayProps> = ({
         </div>
       )}
 
-      {/* CENTER FLIGHT RETICLE & CALLOUT (Unobstructed during active flight) */}
+      {/* CENTER FLIGHT RETICLE, CORNER COMPASS & CALLOUT (Unobstructed during active flight) */}
       {hud.phase === 'playing' && (
         <>
+          {/* Compact Top-Left 6-Axis Motion Compass when Rabboni Sensor is Connected */}
+          {sensorConnected && (
+            <div className="fixed top-20 sm:top-16 left-4 sm:left-6 z-20 pointer-events-none">
+              <MotionCompass
+                variant="compact"
+                sensorState={sensorState}
+                config={sensorConfig}
+                activeGesture={activeGesture}
+              />
+            </div>
+          )}
+
           {/* Dynamic Targeting Crosshair */}
           <div
             className="fixed left-1/2 top-1/2 pointer-events-none transition-transform duration-75"
@@ -260,54 +280,87 @@ export const HudOverlay: React.FC<HudOverlayProps> = ({
 
       {/* TITLE SCREEN OVERLAY */}
       {hud.phase === 'title' && (
-        <main className="relative z-20 flex-1 flex items-center justify-center px-4 pointer-events-none">
-          <div className="w-full max-w-lg text-center space-y-6 pointer-events-auto bg-[#080d1a]/82 border border-slate-700/60 rounded-2xl px-6 sm:px-9 py-8 shadow-2xl">
-            <div className="space-y-2.5">
-              <div className="text-xs font-mono-num tracking-widest text-cyan-400">
-                SUPERSONIC 6-AXIS MOTION FLIGHT
+        <main className="relative z-20 flex-1 flex items-center justify-center px-4 overflow-y-auto pointer-events-none">
+          <div
+            className={`w-full pointer-events-auto grid gap-4 items-center ${
+              sensorConnected ? 'max-w-5xl lg:grid-cols-[1fr_1.08fr]' : 'max-w-lg grid-cols-1'
+            }`}
+          >
+            <div className="w-full text-center space-y-6 bg-[#080d1a]/84 border border-slate-700/60 rounded-2xl px-6 sm:px-9 py-8 shadow-2xl">
+              <div className="space-y-2.5">
+                <div className="text-xs font-mono-num tracking-widest text-cyan-400">
+                  SUPERSONIC 6-AXIS MOTION FLIGHT
+                </div>
+                <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white [text-wrap:balance]">
+                  星際峽谷戰機
+                </h1>
+                <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+                  貼地飛越霓虹峽谷與隕石陣，穿越能量環啟動超音速加速，鎖定並擊毀防禦塔。
+                </p>
               </div>
-              <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white [text-wrap:balance]">
-                星際峽谷戰機
-              </h1>
-              <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-                貼地飛越霓虹峽谷與隕石陣，穿越能量環啟動超音速加速，鎖定並擊毀防禦塔。
-              </p>
+
+              {/* Clean unboxed flight mechanic metadata */}
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                <span>左右傾斜翻滾閃避</span>
+                <span aria-hidden="true">·</span>
+                <span>前後傾角爬升俯衝</span>
+                <span aria-hidden="true">·</span>
+                <span>快速甩動桶滾無敵</span>
+              </div>
+
+              {hud.highScore > 0 && (
+                <div className="text-xs text-slate-400">
+                  最高航行紀錄{' '}
+                  <span className="font-mono-num text-amber-300 font-bold ml-1">
+                    {hud.highScore.toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onStart}
+                  className="w-full sm:w-auto px-8 py-3 rounded-xl font-display font-bold text-base tracking-wide bg-cyan-400 hover:bg-cyan-300 text-slate-950 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  開始出擊
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenSensor}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-medium bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  {sensorConnected ? '感測器與方向儀設定' : '連線 Rabboni 感測器'}
+                </button>
+              </div>
             </div>
 
-            {/* Clean unboxed flight mechanic metadata */}
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-400">
-              <span>左右傾斜翻滾閃避</span>
-              <span aria-hidden="true">·</span>
-              <span>前後傾角爬升俯衝</span>
-              <span aria-hidden="true">·</span>
-              <span>快速甩動桶滾無敵</span>
-            </div>
-
-            {hud.highScore > 0 && (
-              <div className="text-xs text-slate-400">
-                最高航行紀錄{' '}
-                <span className="font-mono-num text-amber-300 font-bold ml-1">
-                  {hud.highScore.toLocaleString()}
-                </span>
+            {/* Pre-Game Live 6-Axis Compass Verification Panel when Sensor is Connected */}
+            {sensorConnected && (
+              <div className="w-full bg-[#080d1a]/88 border border-slate-700/60 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-300 font-medium">
+                    開飛前握姿確認 · <span className="text-cyan-300">{sensorState.statusMessage}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCalibrate}
+                    disabled={!sensorState.fresh}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-medium transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <Compass className="w-3.5 h-3.5 shrink-0" />
+                    <span>{sensorState.calibrating ? '校正中…' : '校正中央握姿'}</span>
+                  </button>
+                </div>
+                <MotionCompass
+                  variant="full"
+                  sensorState={sensorState}
+                  config={sensorConfig}
+                  activeGesture={activeGesture}
+                  onUpdateConfig={onUpdateConfig}
+                />
               </div>
             )}
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={onStart}
-                className="w-full sm:w-auto px-8 py-3 rounded-xl font-display font-bold text-base tracking-wide bg-cyan-400 hover:bg-cyan-300 text-slate-950 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                開始出擊
-              </button>
-              <button
-                type="button"
-                onClick={onOpenSensor}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-medium bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                連線 Rabboni 感測器
-              </button>
-            </div>
           </div>
         </main>
       )}

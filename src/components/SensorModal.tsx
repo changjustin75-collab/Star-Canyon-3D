@@ -1,12 +1,14 @@
 import React from 'react';
-import { Sliders, Wifi, Smartphone, Keyboard, RotateCcw, X, Compass } from 'lucide-react';
+import { Sliders, Wifi, Smartphone, Keyboard, X, Compass } from 'lucide-react';
 import type { RabboniConfig, RabboniSource, RabboniState } from '../lib/rabboni-connector';
+import { MotionCompass, type GestureFeedback } from './MotionCompass';
 
 interface SensorModalProps {
   open: boolean;
   onClose: () => void;
   sensorState: RabboniState;
   config: RabboniConfig;
+  activeGesture: GestureFeedback | null;
   wsUrl: string;
   androidCode: string;
   errorText: string;
@@ -26,6 +28,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
   onClose,
   sensorState,
   config,
+  activeGesture,
   wsUrl,
   androidCode,
   errorText,
@@ -42,7 +45,6 @@ export const SensorModal: React.FC<SensorModalProps> = ({
   if (!open) return null;
 
   const activeSource = sensorState.source;
-  const gyroPct = Math.min(100, (sensorState.maxRotationRate / Math.max(40, config.gyroThreshold)) * 100);
 
   return (
     <div
@@ -53,7 +55,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl bg-[#0c1222] border border-slate-700/70 rounded-xl shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl bg-[#0c1222] border border-slate-700/70 rounded-xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -75,7 +77,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <div className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
           {/* Input Mode Segmented Control */}
           <div className="space-y-2">
             <label className="block text-xs font-medium text-slate-400">操控來源切換</label>
@@ -258,122 +260,14 @@ export const SensorModal: React.FC<SensorModalProps> = ({
             </div>
           )}
 
-          {/* Live 6-Axis Telemetry Preview when Connected */}
-          {activeSource !== 'manual' && (
-            <div className="p-4 rounded-lg bg-[#080d1a] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>即時雙軸傾角與甩動角速度</span>
-                <span className="font-mono-num text-slate-300">
-                  Roll {sensorState.x.toFixed(2)} · Pitch {sensorState.y.toFixed(2)} ·{' '}
-                  {Math.round(sensorState.maxRotationRate)}°/s
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                {/* 2D Tilt Pad */}
-                <div className="relative h-24 rounded-lg bg-[#0c1222] border border-slate-800 overflow-hidden">
-                  <div className="absolute inset-x-0 top-1/2 h-px bg-slate-700/70" />
-                  <div className="absolute inset-y-0 left-1/2 w-px bg-slate-700/70" />
-                  <div
-                    className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-full bg-cyan-400 border-2 border-white transition-transform duration-75"
-                    style={{
-                      left: `${50 + sensorState.x * 42}%`,
-                      top: `${50 - sensorState.y * 42}%`,
-                    }}
-                  />
-                </div>
-
-                {/* Gyro Flick Meter */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400">桶滾甩動觸發計</span>
-                    <span className="font-mono-num text-cyan-300">
-                      {Math.round(sensorState.maxRotationRate)} / {config.gyroThreshold}°/s
-                    </span>
-                  </div>
-                  <div className="h-2.5 rounded bg-slate-800 overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-75 ${
-                        gyroPct >= 100 ? 'bg-amber-400' : 'bg-cyan-400'
-                      }`}
-                      style={{ width: `${gyroPct}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    左右傾角翻滾閃避、前後傾角爬升俯衝；快速甩動手腕達門檻即觸發桶滾無敵閃避。
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Sensitivity & Axis Tuning */}
-          {activeSource !== 'manual' && (
-            <div className="space-y-3 pt-1 border-t border-slate-800">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <label className="space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-300">
-                    <span>傾斜靈敏度 (Gain)</span>
-                    <span className="font-mono-num text-cyan-300">{config.gain.toFixed(1)}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.6"
-                    max="2.0"
-                    step="0.1"
-                    value={config.gain}
-                    onChange={(e) => onUpdateConfig({ gain: parseFloat(e.target.value) })}
-                    className="w-full accent-cyan-400"
-                  />
-                </label>
-
-                <label className="space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-300">
-                    <span>桶滾甩動門檻 (°/s)</span>
-                    <span className="font-mono-num text-amber-300">{config.gyroThreshold}°/s</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="80"
-                    max="240"
-                    step="5"
-                    value={config.gyroThreshold}
-                    onChange={(e) => onUpdateConfig({ gyroThreshold: parseInt(e.target.value, 10) })}
-                    className="w-full accent-amber-400"
-                  />
-                </label>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={config.flipX}
-                    onChange={(e) => onUpdateConfig({ flipX: e.target.checked })}
-                    className="accent-cyan-400"
-                  />
-                  <span>反轉左右滾轉</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={config.flipY}
-                    onChange={(e) => onUpdateConfig({ flipY: e.target.checked })}
-                    className="accent-cyan-400"
-                  />
-                  <span>反轉前後俯仰</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => onUpdateConfig({ axis: config.axis === 1 ? 0 : 1 })}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>握持軸向：{config.axis === 1 ? 'Y 前後 / X 左右' : 'X 前後 / Y 左右'}</span>
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Full Live 6-Axis Motion Compass (Crosshair Radar + Push/Pull + One-Click Axis Fix) */}
+          <MotionCompass
+            variant="full"
+            sensorState={sensorState}
+            config={config}
+            activeGesture={activeGesture}
+            onUpdateConfig={onUpdateConfig}
+          />
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AboutModal } from './components/AboutModal';
 import { HudOverlay } from './components/HudOverlay';
+import type { GestureFeedback } from './components/MotionCompass';
 import { SensorModal } from './components/SensorModal';
 import { CanyonEngine, type CameraView, type HudSnapshot } from './game/CanyonEngine';
 import {
@@ -80,6 +81,7 @@ export default function App() {
 
   const [sensorModalOpen, setSensorModalOpen] = useState(false);
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
+  const [activeGesture, setActiveGesture] = useState<GestureFeedback | null>(null);
   const [muted, setMuted] = useState(false);
   const [cameraView, setCameraView] = useState<CameraView>('chase');
   const [autoFire, setAutoFire] = useState(true);
@@ -92,6 +94,8 @@ export default function App() {
   const pointerTiltRef = useRef({ roll: 0, pitch: 0 });
   const lastFlickAtRef = useRef(0);
   const lastSensorUiSyncRef = useRef(0);
+  const gestureSeqRef = useRef(0);
+  const gestureTimerRef = useRef<number | null>(null);
 
   // Mount Three.js CanyonEngine once in an isolated ref container
   useEffect(() => {
@@ -142,8 +146,20 @@ export default function App() {
           }
         }
       },
-      onGesture(_type, state) {
+      onGesture(type, state) {
         const now = performance.now();
+        // Immediate visual confirmation for ▲ 前推 PUSH / ▼ 後拉 PULL
+        gestureSeqRef.current += 1;
+        setActiveGesture({ type, id: gestureSeqRef.current });
+        setSensorState(state);
+        if (gestureTimerRef.current !== null) {
+          window.clearTimeout(gestureTimerRef.current);
+        }
+        gestureTimerRef.current = window.setTimeout(() => {
+          setActiveGesture(null);
+          gestureTimerRef.current = null;
+        }, 1150);
+
         if (state.calibrated && engineRef.current && now - lastFlickAtRef.current > 650) {
           const dir = Math.abs(state.x) > 0.15 ? Math.sign(state.x) : 1;
           if (engineRef.current.triggerBarrelRoll(dir)) {
@@ -162,6 +178,9 @@ export default function App() {
     window.addEventListener('pagehide', handlePageHide);
     return () => {
       window.removeEventListener('pagehide', handlePageHide);
+      if (gestureTimerRef.current !== null) {
+        window.clearTimeout(gestureTimerRef.current);
+      }
       rabboni.disconnect();
       rabboniRef.current = null;
     };
@@ -421,6 +440,8 @@ export default function App() {
       <HudOverlay
         hud={hud}
         sensorState={sensorState}
+        sensorConfig={sensorConfig}
+        activeGesture={activeGesture}
         muted={muted}
         cameraView={cameraView}
         autoFire={autoFire}
@@ -435,6 +456,7 @@ export default function App() {
         onOpenAbout={() => setAboutModalOpen(true)}
         onCalibrate={handleCalibrate}
         onBarrelRoll={handleBarrelRoll}
+        onUpdateConfig={handleUpdateConfig}
       />
 
       {/* Rabboni 6-Axis Sensor Connection & Calibration Modal */}
@@ -443,6 +465,7 @@ export default function App() {
         onClose={() => setSensorModalOpen(false)}
         sensorState={sensorState}
         config={sensorConfig}
+        activeGesture={activeGesture}
         wsUrl={wsUrl}
         androidCode={androidCode}
         errorText={sensorError}
